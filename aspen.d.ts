@@ -17,6 +17,7 @@ interface HTMLElement {
  * callback function override
  */
 interface Tag extends HTMLElement {
+//declare class Tag extends HTMLElement {
   /*
   Widget 에서 생성되지 않은 일반 Tag 에도 적용이 가능한 Input Event Interface 이다. 그냥 DOM Event 를
   사용해서 개발해도 되지만, Touch/Mouse 의 동시 실행을 고려하면 이 Interface 가 더 안정적이고 Click
@@ -146,7 +147,7 @@ interface IFile {
 }
 
 interface IWidgetEvent {
-
+  wgtEvent:{value: string, title: string, param: {[eventName:string]: string}};
 }
 
 interface  IWidget {
@@ -221,7 +222,9 @@ interface  IWidget {
   exeSetState(apx: APXScope, tag: Tag, state: string): void;
   exeSetText?           : () => void;
   exeAssetLoad?         : () => void;
+  exeOnScreenDrag(apx: APXScope, widgetId: string, start: boolean): void;
   edtOnBuildEvent(file: IFile, widgetId: string, pageID: string, event: IWidgetEvent): void;
+  exeOnReceiveMessage(apx: APXScope, widgetId: string, value:any): void;
 
   /////////////////////
 
@@ -1199,7 +1202,7 @@ interface APD {
    * 위젯의 WidgetEvent에 이벤트 타입 정의
    * @param  {IWidgetEvent} event            edtOnBuildEvent의 인자로 넘어오는 값을 활용
    * @param  {string}}      typeDefineObject 이벤트 타입정의된 오브젝트
-   * @return {undefined}                     
+   * @return {undefined}
    * @example
    * apxWgtSample.edtOnBuildEvent = function(file, oId, pageId, evt){
    * 	apd.useWgtEvent(evt, {ready:'Ready', play:'Play'});
