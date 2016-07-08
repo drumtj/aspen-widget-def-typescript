@@ -141,6 +141,14 @@ interface IWidgetObejctData {
   wgtTitle              : string;
 }
 
+interface IFile {
+
+}
+
+interface IWidgetEvent {
+
+}
+
 interface  IWidget {
 
   /**
@@ -194,13 +202,26 @@ interface  IWidget {
   createAsCanvasObject(prj:{}, position:{}, size:{}, styles?:{}, property?:{}): Object;
   onEdit(editor: EditorScope, widgetId: string, screenX: number, screenY: number): void;
 
+  /**
+   * 'Container 기반 Widget'의 경우에만 호출이 되며, Widget 이 Container 의 편집 영역에 Layout 등을 추가로 표시하기 원할 때 구현하는 함수이다.
+   * @param {APDScope}                 apd
+   * @param {string}                   widgetId
+   * @param {CanvasRenderingContext2D} ctx      HTML5 Canvas Context 이다. 이것을 사용하여 필요한 내용을 Draw 한다. 이 Canvas 는
+   *                                            Sandbox 방식으로 Isolate 된 것이 아니므로 ctxt.save(), ctxt.restore()를 사용하는 것이 Side effect 가능성을
+   *                                            줄일 수 있다.
+   * @param {number}                   x        Widget 의 표시 영역 좌표
+   * @param {number}                   y        Widget 의 표시 영역 좌표
+   * @param {number}                   w        Widget 의 표시 영역 크기
+   * @param {number}                   h        Widget 의 표시 영역 크기
+   * @param {boolean}                  editMode 현재 편집기(apd)가 편집 상태인지, 또는 미리보기/프린트 상태인지를 나타낸다.
+   */
   edtOnPostDraw(apd: APDScope, widgetId: string, ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, editMode: boolean): void;
   exeCreateTag(g, f, c, e, d): void;
   exeRenderTag?         : () => void;
   exeSetState(apx: APXScope, tag: Tag, state: string): void;
   exeSetText?           : () => void;
   exeAssetLoad?         : () => void;
-  edtOnBuildEvent(prj, oId, pageID, ret): void;
+  edtOnBuildEvent(file: IFile, widgetId: string, pageID: string, event: IWidgetEvent): void;
 
   /////////////////////
 
@@ -1173,9 +1194,24 @@ interface APDScope extends APBase {
 
 }
 
+interface APD {
+  /**
+   * 위젯의 WidgetEvent에 이벤트 타입 정의
+   * @param  {IWidgetEvent} event            edtOnBuildEvent의 인자로 넘어오는 값을 활용
+   * @param  {string}}      typeDefineObject 이벤트 타입정의된 오브젝트
+   * @return {undefined}                     
+   * @example
+   * apxWgtSample.edtOnBuildEvent = function(file, oId, pageId, evt){
+   * 	apd.useWgtEvent(evt, {ready:'Ready', play:'Play'});
+   * }
+   */
+  useWgtEvent(event: IWidgetEvent, typeDefineObject: {[eventName:string]:string}): void;
+}
+
 
 /*
 전역
  */
 declare var apn         : APN;
 declare var apx         : APX;
+declare var apd         : APD;
