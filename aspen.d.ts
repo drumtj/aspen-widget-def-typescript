@@ -5,7 +5,7 @@
 ////////////////////////////////////
 
 
-
+// override
 interface HTMLElement {
   $TAG(tagName: string, attr:{});
   $CSS(styleName: string, value: string);
@@ -122,7 +122,7 @@ interface IWidgetObject {
   canvas                : any;
   active                : boolean;
   layerIndex            : number;
-  // index start 1
+  // base index 1
   layers                : IWidgetObject[];
   module                : string;
   position              : {x:number, y:number};
@@ -593,8 +593,6 @@ interface APXScope extends APBase {
   height                                    : number;
   screen                                    : APXScope_Screen;
 
-  // wgt                                       : APXScope_WGT;
-
   /**
    * widgetId에 해당하는 Widget을 주어진 조건으로 검색함.<br>
    * 조건은 다음과 같으며 모두 지정하면 합집합이 Return 됨.<br>
@@ -603,7 +601,7 @@ interface APXScope extends APBase {
    * @param  {string} [widgetId]        위젯 ID
    * @param  {string} [childWidgetId]   자식위젯 ID
    * @param  {string} [siblingWidgetId] sibling위젯 ID
-   * @return {any[]}                    위젯ID 합집합 배열
+   * @return {string[]}                 위젯ID 합집합 배열
    */
   widgetsByClass(widgetId?: string, childWidgetId?: string, siblingWidgetId?: string): string[];
 
@@ -612,7 +610,7 @@ interface APXScope extends APBase {
    * @param  {string} [apxType]         apxType
    * @param  {string} [childWidgetId]   자식위젯 ID
    * @param  {string} [siblingWidgetId] sibling위젯 ID
-   * @return {any[]}                    위젯ID 합집합 배열
+   * @return {string[]}                 위젯ID 합집합 배열
    */
   widgetsByType(apxType?: string, childWidgetId?: string, siblingWidgetId?: string): string[];
 
