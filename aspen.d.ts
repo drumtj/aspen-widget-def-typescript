@@ -105,8 +105,80 @@ interface Tag extends HTMLElement {
    tagOnPostMove(apx: APXScope, tag: Tag): void;
 }
 
-interface EditorScope {
+interface EditorBase {
+  wgtRefreshUI(widgetId: string): void;
+
   getObjectByID(widgetId: string): IWidgetObject;
+
+  /**
+   * apx.widgetsByClass()와 동일하지만 자동으로 ’childOfWidget’방식만 지원함
+   * @param  {string} widgetId        위젯 ID
+   * @param  {string} widgetModuleId
+   * @return {string[]}               위젯ID 합집합 배열
+   */
+  wgtByClass(widgetId: string, widgetModuleId: string): string[];
+
+  /**
+   * apx.widgetsByType()와 동일하지만 자동으로 ’childOfWidget’방식만 지원함
+   * @param  {string} widgetId        위젯 ID
+   * @param  {string} apxType         apxType
+   * @return {string[]}               위젯ID 합집합 배열
+   */
+  wgtByType(widgetId: string, apxType: string): string[];
+
+
+  /**
+   * Widget Configuration 을 위한 Modal Popup Dialog 를 생성함. Body 에 해당하는 DIV Tag 가 Return
+   * 되므로 그 안에 필요한 화면을 DOM 방식으로 개발하면 된다. OK Button 이 선택될 경우에만 onOK() Callback 이 호출된다.
+   * @param  {number} width
+   * @param  {number} height
+   * @param  {Function}      onOk
+   * @param  {Function}      onCancel
+   * @return {Tag} Body 에 해당하는 DIV Tag 가 Return
+   */
+  showDialog(width: number, height: number, onOk?: () => void, onCancel?: () => void): Tag;
+
+  /**
+   * Configuration Dialog 에서 Media 를 선택하기 위한 Picker 를 표시하고 선택이 되면 onPick()에 Media Id가 전달된다.
+   * @param  {MediaType} mediaType 1=Image, 2=Video, 3=Audio
+   * @param  {string}    mediaID   ID, 이미 선택된 값이 있으면 전달함
+   * @param  {Function}    onPick    function(mediaId){}, 선택된 것이 없으면 null 이 Return 되므로 Boolean Check 를 하면 됨
+   * @return {undefined}
+   */
+  pickMedia(mediaType: MediaType, mediaID?: string, onPick?: (mediaId: string) => void): void;
+
+  /**
+   * Configuration Dialog 에서 Color 를 선택하기 위한 Picker 를 표시하고 선택이 되면 onPick()에 Color 가전달된다.
+   * Color 는 ‘#FFFFFF’, ‘rgb(255,255,255)’, ‘rgba(255,255,255,1)’ 형태가 사용됨
+   * @param  {Tag} tagInput    Popup Picker 를 출력하기 위한 자리를 파악하기 위한 기준 Tag 이다. 이 Tag 의 좌측 하단에 표시가 된다
+   * @param  {string}      curColor
+   * @param  {string}      onPickColor function(color){}
+   * @return {undefined}
+   */
+  pickColor(tagInput: Tag, curColor?: string, onPickColor?:(color: string) => void): void;
+}
+
+interface EditorScope extends APBase, EditorBase {
+  getScrollX ();
+  getScrollY ();
+  getZoomX ();
+  getZoomY ();
+  toScreenX (c);
+  toCanvasX (c);
+  toScreenY (c);
+  toCanvasY (c);
+  toScreenW (c);
+  toCanvasW (c);
+  toScreenH (c);
+  toCanvasH(c);
+  remove(f);
+  removeAll();
+  add(d);
+  zoomByPercent (d);
+  getZoomPercent();
+  setZoomRange (d,f,g);
+  getZoomRange ();
+  getZoomRangeByPercent ();
 }
 
 interface EditorOption {
@@ -133,17 +205,49 @@ interface IWidgetObject {
   style                 : IWStyleMap;
   type                  : number;
   updated               : boolean;
+  object                : {[objId: string]: IWidgetObject};
 }
 
 interface IWidgetObejctData {
-  properties            : any;
+  properties?           : any;
   styles                : any;
   wgtID                 : string;
   wgtTitle              : string;
 }
 
-interface IFile {
+interface ModuleObject {
+  create                : {
+                          data : IWidgetObejctData;
+                          type : number;
+                          zIndex : number;
+                        };
+  init                  : {
+                          cx : number;
+                          cy : number;
+                          position : {
+                            x : number;
+                            y : number;
+                          };
+                          shape : {
+                            w : number;
+                            h : number;
+                            type : number;
+                          }
+                        };
+  module                : string;
+}
 
+interface PageObject {
+  UI                    :{
+                          order: number;
+                          title: string;
+                        };
+  module                : string;
+  objects               : {[widgetId:string]: ModuleObject};
+}
+
+interface IFile {
+  pages: {[pageId: string]: PageObject};
 }
 
 interface IWidgetEvent {
@@ -217,12 +321,71 @@ interface  IWidget {
    * @param {boolean}                  editMode 현재 편집기(apd)가 편집 상태인지, 또는 미리보기/프린트 상태인지를 나타낸다.
    */
   edtOnPostDraw(apd: APDScope, widgetId: string, ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, editMode: boolean): void;
+
+  /**
+   * 'Basic Widget기반 Widget'의 경우에만 호출이 되며, Widget 이 Container 의 편집 영역에 Layout 등을 추가로 표시하기 원할 때 구현하는 함수이다.
+   * @param {APDScope}                 apd
+   * @param {string}                   widgetId
+   * @param {CanvasRenderingContext2D} ctx      HTML5 Canvas Context 이다. 이것을 사용하여 필요한 내용을 Draw 한다. 이 Canvas 는
+   *                                            Sandbox 방식으로 Isolate 된 것이 아니므로 ctxt.save(), ctxt.restore()를 사용하는 것이 Side effect 가능성을
+   *                                            줄일 수 있다.
+   * @param {number}                   x        Widget 의 표시 영역 좌표
+   * @param {number}                   y        Widget 의 표시 영역 좌표
+   * @param {number}                   w        Widget 의 표시 영역 크기
+   * @param {number}                   h        Widget 의 표시 영역 크기
+   * @param {boolean}                  editMode 현재 편집기(apd)가 편집 상태인지, 또는 미리보기/프린트 상태인지를 나타낸다.
+   */
+  edtOnDraw(apd: APDScope, widgetId: string, ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, editMode: boolean): void;
+
+  /**
+   * 편집기의 인터렉션편집에서 Extended Property를 선택하여 값을 가져오기 전에 실행됨.
+   * A.1항의 'Extended Property'를 Widget instance별로 다르게 구성하기 위하여 구현하는 함수이다. 즉 해당 Widget의 현재 Data 및 Property를 참조하여 해당 정보를 구성하여 Return하는 함수이다.
+   * (Single input text의 경우에는 현재 해당 Property가 표시가 되므로 이점이 별로 없지만, Selection input의 경우에는 Selection option을 Widget마다 다르게 할 수 있는 이점 등이 있다.)
+   * 이 호출 경로는 APD instance가 없는 경로이므로 Widget의 Property를 읽기 위해서
+   * file.pages[pageId].objects[oId]..create.data.properties.attrs{} 를 조회해야 한다.
+   * A.1항의runtimeProperties{}와 동일한 형식으로 Return한다. Ex) {URL:{title:'URL', input:'http://'}}
+   * @param {IFile}  file
+   * @param {string} widgetId
+   * @param {string} pageId
+   */
+  edtOnBuildRuntimeProperty(file: IFile, widgetId: string, pageId: string): void;
+
+  /**
+   * 편집기는 'Fit to default size' 기능을 제공하는데 이것은 편집자에 의해 크기가 변경된 Widget을 기본 크기로 원상 복구하기 위한 기능이다.
+   * Widget이 이 기능을 지원하기 원할 때 이 함수를 구현하면 편집기는 그 크기를 파악하기 위하여 호출하게 된다.
+   * (Image나 Video 등 Media asset을 사용하는 Widget의 경우, 'Fit to default size' 기능이 이 함수가 없어도 동작한다)
+   * Widget의 편집 상태에 의해서, 기본 크기를 파악할 수 없는 상황이면 undefined를 Return한다.
+   * @param  {APDScope} apd
+   * @param  {string}   widgetId
+   * @param  {Object}   attr     현재 Widget의 Data에서 properties.attrs{}에 해당하는 정보
+   * @return {Object}            {w: number, h: number}
+   * @example
+   * 	wgtSample.edtOnFitToSize = function(apd, objID, attrs){
+   *  	if (attrs.cfg.s && attrs.cfg.s.w && attrs.cfg.s.h){
+   *      return {w:attrs.cfg.s.w, h:attrs.cfg.s.h};
+   *    }
+   *  }
+   */
+  edtOnFitToSize(apd: APDScope, widgetId: string, attr?:Object): {w: number, h: number};
+
   exeCreateTag(g, f, c, e, d): void;
   exeRenderTag?         : () => void;
   exeSetState(apx: APXScope, tag: Tag, state: string): void;
   exeSetText?           : () => void;
   exeAssetLoad?         : () => void;
+  exeAssetPreload(apx: APXScope, widgetId: string, onEnd: ()=>void);
   exeOnScreenDrag(apx: APXScope, widgetId: string, start: boolean): void;
+
+  /**
+   * 편집기에서 Widget 이 발생시키는 Event 를 파악하기 위해서 호출하는 함수이다. Widget 이 'Widget Event'를
+   * 발생시킬 경우, 이 함수를 구현해 주면 편집기가 Interaction 및 Scripting 화면에 Event 를 표시한다.
+   * 이 함수의 경우에는 APD instance 가 전달되지 않으므로 apd.useWgtEvent()라는 Static 함수를 사용하여 발생시킬
+   * 'Widget Event'의 패러미터를 등록한다. {id:title,...}의 형태이며 'id'에는 ':', '/' 문자를 사용할 수 없다.
+   * @param {IFile}        file
+   * @param {string}       widgetId
+   * @param {string}       pageID
+   * @param {IWidgetEvent} event
+   */
   edtOnBuildEvent(file: IFile, widgetId: string, pageID: string, event: IWidgetEvent): void;
   exeOnReceiveMessage(apx: APXScope, widgetId: string, value:any): void;
 
@@ -531,7 +694,19 @@ interface IWEditor {
   icon?                 : string;
   iconThumb?            : string;
   properties?           : any;
-  //현재 사용되지 않음
+  /**
+   * Extended Property 는 Widget 의 자체 Property, 즉 properties.attrs{} 아래에 저장된 Property 중에서 Interaction 편집
+   * UI 를 통하여 변경할 수 있는 Property 를 말한다. 다음과 같이 설명하면 'Change Property' Action 의 편집 화면에 'Extended Property'항목이 표시가 된다.
+   * 현재 Text input 형태만 지원하며 Property 는 다수를 지정할 수 있다.
+   * @type {Object}
+   * @example
+   * apxWgtSample.editor = {
+   * 	runtimeProperties:{
+   * 		URL:{title:'URL', input:'http://'} // Property 는 'URL, 이름도 'URL', 기본값은 'http://'가 됨
+   * 		}
+   * 	...
+   * }
+   */
   runtimeProperties?    : any;
 }
 
@@ -1068,6 +1243,7 @@ interface APN {
    */
   inheritWidget(aw:IWidget)             : IWidget;
   Project                               : APNProject;
+  P                                     : any;
 }
 
 declare class APNWidgets extends Array<IWidget>{
@@ -1143,57 +1319,16 @@ declare enum MediaType {
 /*
 edtOnConfig콜백의 인자로 들어오는 apd형태
  */
-interface APDScope extends APBase {
-
-  /**
-   * apx.widgetsByClass()와 동일하지만 자동으로 ’childOfWidget’방식만 지원함
-   * @param  {string} widgetId        위젯 ID
-   * @param  {string} widgetModuleId
-   * @return {string[]}               위젯ID 합집합 배열
-   */
-  wgtByClass(widgetId: string, widgetModuleId: string): string[];
-
-  /**
-   * apx.widgetsByType()와 동일하지만 자동으로 ’childOfWidget’방식만 지원함
-   * @param  {string} widgetId        위젯 ID
-   * @param  {string} apxType         apxType
-   * @return {string[]}               위젯ID 합집합 배열
-   */
-  wgtByType(widgetId: string, apxType: string): string[];
+interface APDScope extends APBase, EditorBase{
 
 
+  getData():{};
 
-  dlgDoModal(width: number, height: number, onOk: () => void): void;
 
-  /**
-   * Widget Configuration 을 위한 Modal Popup Dialog 를 생성함. Body 에 해당하는 DIV Tag 가 Return
-   * 되므로 그 안에 필요한 화면을 DOM 방식으로 개발하면 된다. OK Button 이 선택될 경우에만 onOK() Callback 이 호출된다.
-   * @param  {number} width
-   * @param  {number} height
-   * @param  {Function}      onOk
-   * @param  {Function}      onCancel
-   * @return {Tag} Body 에 해당하는 DIV Tag 가 Return
-   */
-  showDialog(width: number, height: number, onOk?: () => void, onCancel?: () => void): Tag;
+  draw(): void;
+  invalidateRect(): void;
 
-  /**
-   * Configuration Dialog 에서 Media 를 선택하기 위한 Picker 를 표시하고 선택이 되면 onPick()에 Media Id가 전달된다.
-   * @param  {MediaType} mediaType 1=Image, 2=Video, 3=Audio
-   * @param  {string}    mediaID   ID, 이미 선택된 값이 있으면 전달함
-   * @param  {Function}    onPick    function(mediaId){}, 선택된 것이 없으면 null 이 Return 되므로 Boolean Check 를 하면 됨
-   * @return {undefined}
-   */
-  pickMedia(mediaType: MediaType, mediaID?: string, onPick?: (mediaId: string) => void): void;
 
-  /**
-   * Configuration Dialog 에서 Color 를 선택하기 위한 Picker 를 표시하고 선택이 되면 onPick()에 Color 가전달된다.
-   * Color 는 ‘#FFFFFF’, ‘rgb(255,255,255)’, ‘rgba(255,255,255,1)’ 형태가 사용됨
-   * @param  {Tag} tagInput    Popup Picker 를 출력하기 위한 자리를 파악하기 위한 기준 Tag 이다. 이 Tag 의 좌측 하단에 표시가 된다
-   * @param  {string}      curColor
-   * @param  {string}      onPickColor function(color){}
-   * @return {undefined}
-   */
-  pickColor(tagInput: Tag, curColor?: string, onPickColor?:(color: string) => void): void;
 
 }
 
@@ -1211,6 +1346,19 @@ interface APD {
   useWgtEvent(event: IWidgetEvent, typeDefineObject: {[eventName:string]:string}): void;
 }
 
+interface EDULIB{
+  edtInputAdd(apd: APDScope, tag: Tag, opt: EDULIB_INPUT_OPT): void;
+  edtInputApplyAll(apd: APDScope, tag: Tag): void;
+}
+
+interface EDULIB_INPUT_OPT{
+  type                : string;
+  title?              : string;
+  key?                : string;
+  value?              : {};
+  comment?            : string;
+  options?            : string[];
+}
 
 /*
 전역
@@ -1218,3 +1366,4 @@ interface APD {
 declare var apn         : APN;
 declare var apx         : APX;
 declare var apd         : APD;
+declare var eduLib      : EDULIB;
