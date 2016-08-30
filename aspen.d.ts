@@ -17,6 +17,10 @@ interface HTMLElement {
  * callback function override
  */
 interface Tag extends HTMLElement {
+
+  //내부에서 사용하는 id참조.  apx.wgtId(tag)와 같음
+  apnOID:string;
+  apxBackgroundRun:boolean;
 //declare class Tag extends HTMLElement {
   /*
   Widget 에서 생성되지 않은 일반 Tag 에도 적용이 가능한 Input Event Interface 이다. 그냥 DOM Event 를
@@ -108,6 +112,8 @@ interface Tag extends HTMLElement {
 interface EditorBase {
   wgtRefreshUI(widgetId: string): void;
 
+  getScreenData(): PageObject;
+
   getObjectByID(widgetId: string): IWidgetObject;
 
   /**
@@ -116,7 +122,7 @@ interface EditorBase {
    * @param  {string} widgetModuleId
    * @return {string[]}               위젯ID 합집합 배열
    */
-  wgtByClass(widgetId: string, widgetModuleId: string): string[];
+  wgtByClass(widgetId: string, widgetModuleId?: string): string[];
 
   /**
    * apx.widgetsByType()와 동일하지만 자동으로 ’childOfWidget’방식만 지원함
@@ -215,6 +221,15 @@ interface IWidgetObejctData {
   wgtTitle              : string;
 }
 
+interface LayersObject {
+  stateId: LayerObject[];
+}
+
+interface LayerObject {
+  id:string;
+  title: string;
+}
+
 interface ModuleObject {
   create                : {
                           data : IWidgetObejctData;
@@ -235,6 +250,11 @@ interface ModuleObject {
                           }
                         };
   module                : string;
+  layout                : {
+                          children:string[];
+                          layerIndex: number;
+                          layers: LayersObject;
+                        };
 }
 
 interface PageObject {
@@ -243,12 +263,15 @@ interface PageObject {
                           title: string;
                         };
   module                : string;
-  objects               : {[widgetId:string]: ModuleObject};
+  objects               : {[widgetId:string]: ModuleObject}[];
 }
 
-interface IFile {
-  pages: {[pageId: string]: PageObject};
+
+//apx.project
+interface APXProject {
+  pages: {[pageId:string]:PageObject}[]
 }
+
 
 interface IWidgetEvent {
   wgtEvent:{value: string, title: string, param: {[eventName:string]: string}};
@@ -288,6 +311,7 @@ interface  IWidget {
    */
   exeFireStateEvent?    : boolean;
 
+  styles                : any;
   styleMap              : IWStyleMap;
   editor?               : IWEditor;
   properties?           : {
@@ -304,7 +328,7 @@ interface  IWidget {
   // ###
   //////////////////// 문서에 없고 파라미터 설명이 필요함
 
-  createAsCanvasObject(prj:{}, position:{}, size:{}, styles?:{}, property?:{}): Object;
+  createAsCanvasObject(prj:APXProject, position:any, size:any, styles?:any, property?:any): Object;
   onEdit(editor: EditorScope, widgetId: string, screenX: number, screenY: number): void;
 
   /**
@@ -344,11 +368,11 @@ interface  IWidget {
    * 이 호출 경로는 APD instance가 없는 경로이므로 Widget의 Property를 읽기 위해서
    * file.pages[pageId].objects[oId]..create.data.properties.attrs{} 를 조회해야 한다.
    * A.1항의runtimeProperties{}와 동일한 형식으로 Return한다. Ex) {URL:{title:'URL', input:'http://'}}
-   * @param {IFile}  file
+   * @param {APXProject}  file
    * @param {string} widgetId
    * @param {string} pageId
    */
-  edtOnBuildRuntimeProperty(file: IFile, widgetId: string, pageId: string): void;
+  edtOnBuildRuntimeProperty(file: APXProject, widgetId: string, pageId: string): void;
 
   /**
    * 편집기는 'Fit to default size' 기능을 제공하는데 이것은 편집자에 의해 크기가 변경된 Widget을 기본 크기로 원상 복구하기 위한 기능이다.
@@ -368,9 +392,9 @@ interface  IWidget {
    */
   edtOnFitToSize(apd: APDScope, widgetId: string, attr?:Object): {w: number, h: number};
 
-  exeCreateTag(g, f, c, e, d): void;
+  exeCreateTag(viewer, canvas, objData, zx, zy): void;
   exeRenderTag?         : () => void;
-  exeSetState(apx: APXScope, tag: Tag, state: string): void;
+  exeSetState(apx: APXScope, tag: Tag, stateId: string, oldStateId:string): void;
   exeSetText?           : () => void;
   exeAssetLoad?         : () => void;
   exeAssetPreload(apx: APXScope, widgetId: string, onEnd: ()=>void);
@@ -381,12 +405,12 @@ interface  IWidget {
    * 발생시킬 경우, 이 함수를 구현해 주면 편집기가 Interaction 및 Scripting 화면에 Event 를 표시한다.
    * 이 함수의 경우에는 APD instance 가 전달되지 않으므로 apd.useWgtEvent()라는 Static 함수를 사용하여 발생시킬
    * 'Widget Event'의 패러미터를 등록한다. {id:title,...}의 형태이며 'id'에는 ':', '/' 문자를 사용할 수 없다.
-   * @param {IFile}        file
+   * @param {APXProject}        file
    * @param {string}       widgetId
    * @param {string}       pageID
    * @param {IWidgetEvent} event
    */
-  edtOnBuildEvent(file: IFile, widgetId: string, pageID: string, event: IWidgetEvent): void;
+  edtOnBuildEvent(file: APXProject, widgetId: string, pageID: string, event: IWidgetEvent): void;
   exeOnReceiveMessage(apx: APXScope, widgetId: string, value:any): void;
 
   /////////////////////
@@ -708,6 +732,8 @@ interface IWEditor {
    * }
    */
   runtimeProperties?    : any;
+
+  onEdit?(/*CEditor*/editor, objID, x, y);
 }
 
 ////////////////////////////////
@@ -791,6 +817,32 @@ interface APXScope extends APBase {
   width                                     : number;
   height                                    : number;
   screen                                    : APXScope_Screen;
+  project                                   : APXProject;
+
+
+  /**
+   * Layer의 State를 바꾸기위함
+   * @param  {string} widgetId [description]
+   * @param  {string} stateId  [description]
+   * @return {[type]}          [description]
+   */
+  stateLayerActivate(widgetId:string, stateId:string);
+  stateSetActive(widgetId:string, stateId:string);
+  stateGetActive(widgetId:string):string;
+
+
+  getZoomX(): number;
+  getZoomY(): number;
+
+  getPageID(): string;
+
+  /**
+   * 부모위젯 id를 반환
+   * Layer container안에 있는 경우, 첫번째 Parent가 Layer이므로, 이 경우 한번 더 찾아 올라가야 Layer container를 찾게 됩니다.
+   * @param  {string} widgetId
+   * @return {string} parentWidgetId
+   */
+  wgtGetParent(widgetId: string):string;
 
   /**
    * widgetId에 해당하는 Widget을 주어진 조건으로 검색함.<br>
@@ -817,12 +869,12 @@ interface APXScope extends APBase {
    * widgetsByClass()와 기본적으로 같으나 Property 의 존재 여부로 검색함. 즉 어떤 Property 를 가지는
    * Widget 을 찾기 위한 목적으로 사용함. (이 기능은 어떤 특정 동작을 가지는 Widget 을 찾는 목적으로 주로
    * 사용함. 그러한 Widget 에 wgtSetProperty()를 호출하여 특정 동작을 시킬 수 있는 구조로 구성하게 됨)
-   * @param  {string} [widgetId]        위젯 ID
+   * @param  {string} [propertyName]    프로퍼티이름
    * @param  {string} [childWidgetId]   자식위젯 ID
    * @param  {string} [siblingWidgetId] sibling위젯 ID
    * @return {any[]}                    합집합 배열
    */
-  widgetsByProperty(widgetId?: string, childWidgetId?: string, siblingWidgetId?: string): any[];
+  widgetsByProperty(propertyName?: string, childWidgetId?: string, siblingWidgetId?: string): any[];
 
   /**
    * Page Event 를 발생시킨다. 이 함수는 등록되지 않는 Event 에 대해서는 처리하지 않고 Warning Logo 을 출력한다.
@@ -1162,6 +1214,13 @@ interface APXScope extends APBase {
   tagBlockPointerEvent(tag: Tag, block: boolean): void;
 
 
+  /**
+   * 특정 프로퍼티를 가진 위젯을 골라냄
+   * @param  {string}   propName
+   * @param  {string}   containerWidgetId
+   * @return {string[]} widgetId list
+   */
+  getWidgetsByProperty(propName:string, containerWidgetId?:string): string[];
 }
 
 
@@ -1244,6 +1303,8 @@ interface APN {
   inheritWidget(aw:IWidget)             : IWidget;
   Project                               : APNProject;
   P                                     : any;
+  CES: any;
+  IWidget:any;
 }
 
 declare class APNWidgets extends Array<IWidget>{
@@ -1251,15 +1312,49 @@ declare class APNWidgets extends Array<IWidget>{
 }
 
 interface APNWidgetsUtils {
-  editWidget(moduleObejct: IWidgetObject, editor: EditorScope, n: number, b: boolean, opt: EditorOption);
+  editWidget(moduleObejct: IWidgetObject, editor: EditorScope, n: number, b: boolean, opt?: EditorOption);
   // toScreenW(a,b);
   // toScreenH(b,a);
   // setAsOpened(a,b);
   // getBorderUnderlineWeight(a,b);
 }
 
+/*
+interface StatesObject {
+  widgetId:
+}
+
+interface StateObject {
+  stateID: string;
+  title: string;
+}
+*/
+
 interface APNProject {
   getWidgetModule(IWidgetObejctData)   : IWidget;
+
+  /**
+   * 멀티레이어의 layer목록을 가져옴
+   * @param  {APNProject}   prj
+   * @param  {string}   pageId
+   * @param  {string}   objectId
+   * @return {{stateID:string;title:string;}[]}
+   */
+  getStateByObjectID(prj:APXProject, pageId:string, objectId:string): {
+    stateID:string;
+    title:string;
+  }[];
+
+  /**
+   * Layer의 ObjectId를 반환
+   * @param  {APXProject} prj
+   * @param  {string}     pageId
+   * @param  {string}     objectId
+   * @param  {string}     stateId
+   * @return {string}     objectId for layer
+   */
+  getStateLayerObjectID(prj:APXProject, pageId:string, objectId:string, stateId:string): string;
+
   /*
   checkState(a,b);
   checkStateByObjectID(b,a,e,d);
@@ -1322,12 +1417,12 @@ edtOnConfig콜백의 인자로 들어오는 apd형태
 interface APDScope extends APBase, EditorBase{
 
 
-  getData():{};
-
+  getData():APXProject;
+  getPageID(widgetId:string):string;
 
   draw(): void;
   invalidateRect(): void;
-
+  dlgDoModal(width:number, height:number, callback:()=>void): HTMLElement;
 
 
 }
@@ -1360,6 +1455,10 @@ interface EDULIB_INPUT_OPT{
   options?            : string[];
 }
 
+interface BX{
+  CCanvasWnd:any;
+}
+
 /*
 전역
  */
@@ -1367,3 +1466,4 @@ declare var apn         : APN;
 declare var apx         : APX;
 declare var apd         : APD;
 declare var eduLib      : EDULIB;
+declare var bx          : BX;
